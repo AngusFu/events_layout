@@ -1,0 +1,25 @@
+[package]
+name = "group_events"
+version = "0.1.0"
+edition = "2021"
+# Optional fields
+description = "A Rust library for processing events and generating layout information"
+license = "MIT"                                                                        # 或者您选择的其他许可证
+repository = "https://github.com/yourusername/event_layout"                            # 您的代码仓库链接
+homepage = "https://yourhomepage.com"                                                  # 项目的主页链接
+authors = ["angusfu1126@qq.com"]
+
+[dependencies]
+wasm-bindgen = "0.2"                               # 用于与 JavaScript 交互
+serde = { version = "1.0", features = ["derive"] } # 用于序列化和反序列化
+serde_json = "1.0"                                 # 用于处理 JSON 数据
+js-sys = "0.3"                                     # 用于访问 JavaScript 的基本功能
+
+[lib]
+crate-type = ["cdylib"] # 生成动态库以供 WebAssembly 使用
+
+[profile.dev]
+opt-level = 2 # 开发模式的优化级别
+
+[profile.release]
+opt-level = 3 # 发布模式的优化级别
