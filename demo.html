@@ -1,83 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
-</head>
+  </head>
 
-<body>
+  <body>
     <script type="module">
-        // 导入初始化函数和处理事件的函数
-        import init, { process_events } from './pkg/your_crate_name'; // 请替换为您的实际包名
+      // 导入初始化函数和处理事件的函数
+      import init, { process_events } from "./pkg/group_events.js"; // 请替换为您的实际包名
 
-        async function main() {
-            // 初始化 WebAssembly 模块
-            await init();
+      async function main() {
+        // 初始化 WebAssembly 模块
+        await init({
+          module_or_path: "./pkg/group_events_bg.wasm",
+        });
 
-            // 定义事件数组
-            const events = [
-                { id: 1, start: 0, end: 1 },
-                { id: 2, start: 1, end: 2 },
-                { id: 3, start: 2, end: 3 },
-            ];
+        // 定义事件数组
+        const events = [
+          { id: 1, start: 0, end: 2 },
+          { id: 2, start: 1, end: 3 },
+          { id: 3, start: 2, end: 4 },
+        ];
 
-            // 创建 Float32Array
-            const eventsArray = createEventsArray(events);
+        // 创建 Float32Array
+        const eventsArray = createEventsArray(events);
 
-            // 调用 Rust 的 process_events 函数
-            const layoutGroupsArray = process_events(eventsArray);
+        // 调用 Rust 的 process_events 函数
+        const layoutGroupsArray = process_events(eventsArray);
 
-            // 解析返回的 Float32Array
-            const layoutGroups = parseLayoutGroups(layoutGroupsArray);
+        // 解析返回的 Float32Array
+        const layoutGroups = parseLayoutGroups(layoutGroupsArray);
 
-            // 打印结果
-            console.log(layoutGroups);
-        }
+        // 打印结果
+        console.log(layoutGroups);
+      }
 
-        // 创建 Float32Array 的辅助函数
-        function createEventsArray(events) {
-            const array = new Float32Array(events.length * 3);
-            events.forEach((event, i) => {
-                array[i * 3] = event.id;         // 第 k 个元素为 id
-                array[i * 3 + 1] = event.start;  // 第 k+1 个元素为 start
-                array[i * 3 + 2] = event.end;    // 第 k+2 个元素为 end
+      // 创建 Float32Array 的辅助函数
+      function createEventsArray(events) {
+        const array = new Float32Array(events.length * 3);
+        events.forEach((event, i) => {
+          array[i * 3] = event.id; // 第 k 个元素为 id
+          array[i * 3 + 1] = event.start; // 第 k+1 个元素为 start
+          array[i * 3 + 2] = event.end; // 第 k+2 个元素为 end
+        });
+        return array;
+      }
+
+      // 解析返回的 Float32Array 的辅助函数
+      function parseLayoutGroups(layoutGroupsArray) {
+        let index = 0;
+        const layoutGroups = [];
+
+        while (index < layoutGroupsArray.length) {
+          const start = layoutGroupsArray[index++];
+          const end = layoutGroupsArray[index++];
+          const columnCount = layoutGroupsArray[index++];
+          const itemCount = layoutGroupsArray[index++];
+
+          const items = [];
+          for (let i = 0; i < itemCount; i++) {
+            items.push({
+              top: layoutGroupsArray[index++],
+              bottom: layoutGroupsArray[index++],
+              height: layoutGroupsArray[index++],
+              column: layoutGroupsArray[index++],
+              eventId: layoutGroupsArray[index++],
             });
-            return array;
+          }
+
+          layoutGroups.push({ start, end, columnCount, items });
         }
 
-        // 解析返回的 Float32Array 的辅助函数
-        function parseLayoutGroups(layoutGroupsArray) {
-            let index = 0;
-            const layoutGroups = [];
+        return layoutGroups;
+      }
 
-            while (index < layoutGroupsArray.length) {
-                const start = layoutGroupsArray[index++];
-                const end = layoutGroupsArray[index++];
-                const columnCount = layoutGroupsArray[index++];
-                const itemCount = layoutGroupsArray[index++];
-
-                const items = [];
-                for (let i = 0; i < itemCount; i++) {
-                    items.push({
-                        top: layoutGroupsArray[index++],
-                        bottom: layoutGroupsArray[index++],
-                        height: layoutGroupsArray[index++],
-                        column: layoutGroupsArray[index++],
-                        eventId: layoutGroupsArray[index++],
-                    });
-                }
-
-                layoutGroups.push({ start, end, columnCount, items });
-            }
-
-            return layoutGroups;
-        }
-
-        // 运行主函数
-        main().catch(console.error);
+      // 运行主函数
+      main().catch(console.error);
     </script>
-</body>
-
+  </body>
 </html>
