@@ -1,15 +1,13 @@
-use js_sys::Float32Array; // 导入 Float32Array
-use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct Event {
     id: f32,
     start: f32,
     end: f32,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct LayoutGroup {
     pub start: f32,
     pub end: f32,
@@ -17,7 +15,7 @@ pub struct LayoutGroup {
     pub items: Vec<EventLayout>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct EventLayout {
     pub top: f32,
     pub bottom: f32,
@@ -27,19 +25,19 @@ pub struct EventLayout {
 }
 
 #[wasm_bindgen]
-pub fn process_events(events_array: Float32Array) -> Float32Array {
+pub fn process_events(events_array: &[f32]) -> Box<[f32]> {
     let events = parse_events(&events_array);
     let layout_groups = process_events_impl(&events);
     generate_result_array(&layout_groups)
 }
 
-fn parse_events(events_array: &Float32Array) -> Vec<Event> {
-    let mut events = Vec::with_capacity(events_array.length() as usize / 3);
-    for i in 0..(events_array.length() / 3) {
+fn parse_events(events_array: &[f32]) -> Vec<Event> {
+    let mut events = Vec::with_capacity(events_array.len() as usize / 3);
+    for i in 0..(events_array.len() / 3) {
         events.push(Event {
-            id: events_array.get_index(i * 3),
-            start: events_array.get_index(i * 3 + 1),
-            end: events_array.get_index(i * 3 + 2),
+            id: *events_array.get(i * 3).unwrap(),
+            start: *events_array.get(i * 3 + 1).unwrap(),
+            end: *events_array.get(i * 3 + 2).unwrap(),
         });
     }
     events
@@ -227,41 +225,45 @@ fn is_overlap(group: &Group, event: &Event) -> bool {
     group.start < event.end && event.start < group.end
 }
 
-fn generate_result_array(layout_groups: &Vec<LayoutGroup>) -> Float32Array {
+fn generate_result_array(layout_groups: &Vec<LayoutGroup>) -> Box<[f32]> {
     let total_length = layout_groups
         .iter()
         .map(|lg| {
-            4 + lg.items.len() * 5 // 4 for LayoutGroup fields + 5 for each EventLayout
+            4 + lg.items.len() * 7 // 4 for LayoutGroup fields + 5 for each EventLayout
         })
-        .sum::<usize>() as u32;
+        .sum::<usize>();
 
-    let result_array = Float32Array::new_with_length(total_length);
+    let mut result_array = vec![0.0f32; total_length];
     let mut index = 0;
 
     for layout_group in layout_groups {
-        result_array.set_index(index, layout_group.start);
+        result_array[index] = layout_group.start;
         index += 1;
-        result_array.set_index(index, layout_group.end);
+        result_array[index] = layout_group.end;
         index += 1;
-        result_array.set_index(index, layout_group.column_count as f32);
+        result_array[index] = layout_group.column_count as f32;
         index += 1;
-        result_array.set_index(index, layout_group.items.len() as f32);
+        result_array[index] = layout_group.items.len() as f32;
         index += 1;
 
         for event_layout in &layout_group.items {
-            result_array.set_index(index, event_layout.top);
+            result_array[index] = event_layout.top;
             index += 1;
-            result_array.set_index(index, event_layout.bottom);
+            result_array[index] = event_layout.bottom;
             index += 1;
-            result_array.set_index(index, event_layout.height);
+            result_array[index] = event_layout.height;
             index += 1;
-            result_array.set_index(index, event_layout.column as f32);
+            result_array[index] = event_layout.column as f32;
             index += 1;
-            result_array.set_index(index, event_layout.event.id);
+            result_array[index] = event_layout.event.id;
+            index += 1;
+            result_array[index] = event_layout.event.start;
+            index += 1;
+            result_array[index] = event_layout.event.end;
             index += 1;
         }
     }
-    result_array
+    result_array.into_boxed_slice()
 }
 
 #[cfg(test)]

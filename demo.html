@@ -30,6 +30,7 @@
         // 调用 Rust 的 process_events 函数
         const layoutGroupsArray = process_events(eventsArray);
 
+        console.log(layoutGroupsArray);
         // 解析返回的 Float32Array
         const layoutGroups = parseLayoutGroups(layoutGroupsArray);
 
@@ -66,7 +67,11 @@
               bottom: layoutGroupsArray[index++],
               height: layoutGroupsArray[index++],
               column: layoutGroupsArray[index++],
-              eventId: layoutGroupsArray[index++],
+              event: {
+                id: layoutGroupsArray[index++],
+                start: layoutGroupsArray[index++],
+                end: layoutGroupsArray[index++],
+              },
             });
           }
 
