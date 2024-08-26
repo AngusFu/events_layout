@@ -85,14 +85,6 @@ struct Group {
     start: f32,
     end: f32,
     columns_of_events: Vec<Vec<Event>>,
-    unused_rects: Vec<UnusedRect>,
-}
-
-#[derive(Clone, Copy)]
-struct UnusedRect {
-    start: f32,
-    end: f32,
-    column_index: usize,
 }
 
 impl Group {
@@ -101,96 +93,26 @@ impl Group {
             start: f32::INFINITY,
             end: f32::NEG_INFINITY,
             columns_of_events: Vec::new(),
-            unused_rects: Vec::new(),
         }
     }
 
     fn add(&mut self, event: Event) {
-        let mut unused_rects = self.unused_rects.clone();
-        let placed = self.insert(&event, &mut unused_rects);
-
-        if !placed {
-            let start = self.start.min(event.start);
-            let end = self.end.max(event.end);
-            let mut empty_rects = self.get_empty_rects(start, end);
-
-            if !empty_rects.is_empty() && self.insert(&event, &mut empty_rects) {
-                self.unused_rects = empty_rects;
-            } else {
-                self.columns_of_events.push(vec![event.clone()]);
-            }
-        }
-        self.start = self.start.min(event.start);
-        self.end = self.end.max(event.end);
-    }
-
-    fn insert(&mut self, event: &Event, empty_rects: &mut Vec<UnusedRect>) -> bool {
         let mut placed = false;
 
-        for i in 0..empty_rects.len() {
-            let rect = &mut empty_rects[i];
-            if event.start >= rect.start && event.end <= rect.end {
-                if rect.column_index >= self.columns_of_events.len() {
-                    self.columns_of_events
-                        .resize(rect.column_index + 1, Vec::new());
-                }
-                self.columns_of_events[rect.column_index].push(event.clone());
+        for column in &mut self.columns_of_events {
+            if column.last().unwrap().end <= event.start {
+                column.push(event.clone());
                 placed = true;
-
-                if event.start == rect.start && event.end == rect.end {
-                    empty_rects.remove(i);
-                } else if event.start == rect.start {
-                    rect.start = event.end;
-                } else if event.end == rect.end {
-                    rect.end = event.start;
-                } else {
-                    let new_rects = vec![
-                        UnusedRect {
-                            start: rect.start,
-                            end: event.start,
-                            column_index: rect.column_index,
-                        },
-                        UnusedRect {
-                            start: event.end,
-                            end: rect.end,
-                            column_index: rect.column_index,
-                        },
-                    ];
-                    empty_rects.remove(i);
-                    empty_rects.push(new_rects[0].clone());
-                    empty_rects.push(new_rects[1].clone());
-                }
                 break;
             }
         }
-        placed
-    }
 
-    fn get_empty_rects(&self, start: f32, end: f32) -> Vec<UnusedRect> {
-        let mut empty_rects = Vec::new();
-
-        for (column_index, column) in self.columns_of_events.iter().enumerate() {
-            let mut last_end = start;
-
-            for event in column {
-                if event.start > last_end {
-                    empty_rects.push(UnusedRect {
-                        start: last_end,
-                        end: event.start,
-                        column_index,
-                    });
-                }
-                last_end = last_end.max(event.end);
-            }
-            if last_end < end {
-                empty_rects.push(UnusedRect {
-                    start: last_end,
-                    end,
-                    column_index,
-                });
-            }
+        if !placed {
+            self.columns_of_events.push(vec![event.clone()]);
         }
-        empty_rects
+
+        self.start = self.start.min(event.start);
+        self.end = self.end.max(event.end);
     }
 
     fn calc_layout(&self) -> LayoutGroup {
@@ -229,7 +151,7 @@ fn generate_result_array(layout_groups: &Vec<LayoutGroup>) -> Box<[f32]> {
     let total_length = layout_groups
         .iter()
         .map(|lg| {
-            4 + lg.items.len() * 7 // 4 for LayoutGroup fields + 5 for each EventLayout
+            4 + lg.items.len() * 7 // 4 for LayoutGroup fields + 7 for each EventLayout
         })
         .sum::<usize>();
 
