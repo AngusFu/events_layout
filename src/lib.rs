@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
-// 常量定义
+// Constants
 const EVENT_FIELDS: usize = 3;
 const LAYOUT_GROUP_FIELDS: usize = 4;
 const EVENT_LAYOUT_FIELDS: usize = 7;
@@ -46,7 +46,7 @@ pub fn process_events(events_array: &[f32]) -> Box<[f32]> {
             let layout_groups = process_events_impl(&events);
             generate_result_array(&layout_groups)
         }
-        Err(_) => Box::new([]), // 返回空数组表示错误
+        Err(_) => Box::new([]), // Return empty array on error
     }
 }
 
@@ -65,10 +65,10 @@ fn parse_events(events_array: &[f32]) -> Result<Vec<Event>, &'static str> {
 }
 
 fn process_events_impl(events: &[Event]) -> Vec<LayoutGroup> {
-    // 将事件转换为 Rc
+    // Convert events to Rc
     let events: Vec<Rc<Event>> = events.iter().map(|e| Rc::new(e.clone())).collect();
 
-    // 使用索引排序
+    // Sort using indices
     let mut indices: Vec<usize> = (0..events.len()).collect();
     indices.sort_by(|&i, &j| {
         events[i]
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_process_events_impl() {
-        // 测试用例 1: 正常事件
+        // Test case 1: Normal events
         let events = vec![
             Event {
                 id: 1.0,
@@ -241,7 +241,7 @@ mod tests {
         let layout_groups = process_events_impl(&events);
         assert_eq!(layout_groups.len(), 3);
 
-        // 测试用例 2: 重叠事件
+        // Test case 2: Overlapping events
         let overlapping_events = vec![
             Event {
                 id: 1.0,
@@ -273,12 +273,12 @@ mod tests {
         assert_eq!(layout_groups[0].items[2].event.start, 1.0);
         assert_eq!(layout_groups[0].items[2].event.end, 3.0);
 
-        // 测试用例 3: 空事件
+        // Test case 3: Empty events
         let empty_events: Vec<Event> = vec![];
         let layout_groups = process_events_impl(&empty_events);
         assert_eq!(layout_groups.len(), 0);
 
-        // 测试用例 4: 单个事件
+        // Test case 4: Single event
         let single_event = vec![Event {
             id: 1.0,
             start: 1.0,
@@ -295,13 +295,13 @@ mod tests {
 
     #[test]
     fn test_complex_overlapping_events() {
-        // 测试多个重叠事件组
+        // Test multiple overlapping event groups
         let events = vec![
             Event {
                 id: 1.0,
                 start: 0.0,
                 end: 3.0,
-            }, // 第一组
+            }, // First group
             Event {
                 id: 2.0,
                 start: 1.0,
@@ -316,7 +316,7 @@ mod tests {
                 id: 4.0,
                 start: 6.0,
                 end: 8.0,
-            }, // 第二组
+            }, // Second group
             Event {
                 id: 5.0,
                 start: 7.0,
@@ -332,13 +332,13 @@ mod tests {
         let layout_groups = process_events_impl(&events);
         assert_eq!(layout_groups.len(), 2);
 
-        // 检查第一组
+        // Check first group
         assert_eq!(layout_groups[0].start, 0.0);
         assert_eq!(layout_groups[0].end, 5.0);
         assert_eq!(layout_groups[0].column_count, 3);
         assert_eq!(layout_groups[0].items.len(), 3);
 
-        // 检查第二组
+        // Check second group
         assert_eq!(layout_groups[1].start, 6.0);
         assert_eq!(layout_groups[1].end, 10.0);
         assert_eq!(layout_groups[1].column_count, 2);
@@ -347,7 +347,7 @@ mod tests {
 
     #[test]
     fn test_nested_events() {
-        // 测试嵌套事件（一个事件完全包含在另一个事件中）
+        // Test nested events (one event completely contained within another)
         let events = vec![
             Event {
                 id: 1.0,
@@ -374,28 +374,28 @@ mod tests {
 
     #[test]
     fn test_edge_cases() {
-        // 测试边界情况
+        // Test edge cases
         let events = vec![
             Event {
                 id: 1.0,
                 start: 0.0,
                 end: 0.0,
-            }, // 零时长事件
+            }, // Zero duration event
             Event {
                 id: 2.0,
                 start: 1.0,
                 end: 1.0,
-            }, // 零时长事件
+            }, // Zero duration event
             Event {
                 id: 3.0,
                 start: 2.0,
                 end: 2.0,
-            }, // 零时长事件
+            }, // Zero duration event
             Event {
                 id: 4.0,
                 start: 3.0,
                 end: 3.0,
-            }, // 零时长事件
+            }, // Zero duration event
         ];
 
         let layout_groups = process_events_impl(&events);
@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn test_large_number_of_events() {
-        // 测试大量事件
+        // Test large number of events
         let mut events = Vec::new();
         for i in 0..100 {
             events.push(Event {
@@ -421,14 +421,14 @@ mod tests {
         let layout_groups = process_events_impl(&events);
         assert!(layout_groups.len() > 0);
 
-        // 验证所有事件都被正确处理
+        // Verify all events are processed correctly
         let total_events = layout_groups.iter().map(|g| g.items.len()).sum::<usize>();
         assert_eq!(total_events, 100);
     }
 
     #[test]
     fn test_random_overlapping_events() {
-        // 测试随机重叠事件
+        // Test random overlapping events
         let events = vec![
             Event {
                 id: 1.0,
@@ -467,7 +467,7 @@ mod tests {
         assert_eq!(layout_groups[0].column_count, 3);
         assert_eq!(layout_groups[0].items.len(), 6);
 
-        // 验证布局的正确性
+        // Verify layout correctness
         for item in &layout_groups[0].items {
             assert!(item.top >= 0.0);
             assert!(item.bottom >= 0.0);
