@@ -475,4 +475,38 @@ mod tests {
             assert!(item.column < layout_groups[0].column_count);
         }
     }
+
+    #[test]
+    fn test_demo_example() {
+        let events = vec![
+            Event::new(1.0, 0.0, 2.0).unwrap(),
+            Event::new(2.0, 1.0, 3.0).unwrap(),
+            Event::new(3.0, 2.0, 4.0).unwrap(),
+        ];
+
+        let layout_groups = process_events_impl(&events);
+        assert_eq!(layout_groups.len(), 1);
+        assert_eq!(layout_groups[0].start, 0.0);
+        assert_eq!(layout_groups[0].end, 4.0);
+        assert_eq!(layout_groups[0].column_count, 2);
+        assert_eq!(layout_groups[0].items.len(), 3);
+
+        // 验证布局位置
+        let mut columns = vec![Vec::new(); layout_groups[0].column_count];
+        for item in &layout_groups[0].items {
+            columns[item.column].push((item.event.start, item.event.end));
+        }
+
+        // 验证每列中的事件不重叠
+        for column in &columns {
+            let mut sorted = column.clone();
+            sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            for i in 1..sorted.len() {
+                assert!(sorted[i - 1].1 <= sorted[i].0);
+            }
+        }
+
+        // 验证所有事件都被分配到了列中
+        assert_eq!(columns.iter().map(|c| c.len()).sum::<usize>(), 3);
+    }
 }
