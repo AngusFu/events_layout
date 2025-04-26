@@ -80,3 +80,5 @@ rust-project.json
 bin
 pkg
 *.log
+
+node_modules/

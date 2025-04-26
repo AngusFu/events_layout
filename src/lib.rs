@@ -1,13 +1,28 @@
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
-#[derive(Clone)]
+// 常量定义
+const EVENT_FIELDS: usize = 3;
+const LAYOUT_GROUP_FIELDS: usize = 4;
+const EVENT_LAYOUT_FIELDS: usize = 7;
+
+#[derive(Clone, Debug)]
 pub struct Event {
     id: f32,
     start: f32,
     end: f32,
 }
 
-#[derive(Clone)]
+impl Event {
+    fn new(id: f32, start: f32, end: f32) -> Result<Self, &'static str> {
+        if start >= end {
+            return Err("Event start time must be less than end time");
+        }
+        Ok(Self { id, start, end })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct LayoutGroup {
     pub start: f32,
     pub end: f32,
@@ -15,76 +30,85 @@ pub struct LayoutGroup {
     pub items: Vec<EventLayout>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EventLayout {
     pub top: f32,
     pub bottom: f32,
     pub height: f32,
     pub column: usize,
-    pub event: Event,
+    pub event: Rc<Event>,
 }
 
 #[wasm_bindgen]
 pub fn process_events(events_array: &[f32]) -> Box<[f32]> {
-    let events = parse_events(&events_array);
-    let layout_groups = process_events_impl(&events);
-    generate_result_array(&layout_groups)
+    match parse_events(events_array) {
+        Ok(events) => {
+            let layout_groups = process_events_impl(&events);
+            generate_result_array(&layout_groups)
+        }
+        Err(_) => Box::new([]), // 返回空数组表示错误
+    }
 }
 
-fn parse_events(events_array: &[f32]) -> Vec<Event> {
-    let mut events = Vec::with_capacity(events_array.len() as usize / 3);
-    for i in 0..(events_array.len() / 3) {
-        events.push(Event {
-            id: *events_array.get(i * 3).unwrap(),
-            start: *events_array.get(i * 3 + 1).unwrap(),
-            end: *events_array.get(i * 3 + 2).unwrap(),
-        });
+fn parse_events(events_array: &[f32]) -> Result<Vec<Event>, &'static str> {
+    if events_array.len() % EVENT_FIELDS != 0 {
+        return Err("Invalid events array length");
     }
-    events
+
+    events_array
+        .chunks(EVENT_FIELDS)
+        .enumerate()
+        .map(|(_, chunk)| {
+            Event::new(chunk[0], chunk[1], chunk[2]).map_err(|_| "Invalid event data")
+        })
+        .collect()
 }
-fn process_events_impl(events: &Vec<Event>) -> Vec<LayoutGroup> {
-    // 对事件按开始时间进行排序，若开始时间相同则按结束时间降序排序
-    let mut sorted_events = events.clone();
-    sorted_events.sort_by(|a, b| {
-        a.start
-            .partial_cmp(&b.start)
+
+fn process_events_impl(events: &[Event]) -> Vec<LayoutGroup> {
+    // 将事件转换为 Rc
+    let events: Vec<Rc<Event>> = events.iter().map(|e| Rc::new(e.clone())).collect();
+
+    // 使用索引排序
+    let mut indices: Vec<usize> = (0..events.len()).collect();
+    indices.sort_by(|&i, &j| {
+        events[i]
+            .start
+            .partial_cmp(&events[j].start)
             .unwrap()
-            .then_with(|| b.end.partial_cmp(&a.end).unwrap())
+            .then_with(|| events[j].end.partial_cmp(&events[i].end).unwrap())
     });
 
-    let mut groups: Vec<Group> = Vec::new();
+    let mut groups: Vec<Group> = Vec::with_capacity(events.len());
 
-    for event in sorted_events {
+    for &index in &indices {
+        let event = events[index].clone();
         let mut placed = false;
 
-        // 尝试将事件放入现有的组中
-        for group in &mut groups {
-            if is_overlap(&group, &event) {
+        if let Some(group) = groups.last_mut() {
+            if group.is_overlap(&*event) {
                 group.add(event.clone());
                 placed = true;
-                break;
             }
         }
 
-        // 如果没有找到合适的组，则创建一个新的组
         if !placed {
             let mut new_group = Group::new();
-            new_group.add(event.clone());
+            new_group.add(event);
             groups.push(new_group);
         }
     }
 
-    // 计算每个组的布局
     groups
         .into_iter()
         .map(|group| group.calc_layout())
         .collect()
 }
 
+#[derive(Debug)]
 struct Group {
     start: f32,
     end: f32,
-    columns_of_events: Vec<Vec<Event>>,
+    columns_of_events: Vec<Vec<Rc<Event>>>,
 }
 
 impl Group {
@@ -96,14 +120,16 @@ impl Group {
         }
     }
 
-    fn add(&mut self, event: Event) {
+    fn add(&mut self, event: Rc<Event>) {
         let mut placed = false;
 
         for column in &mut self.columns_of_events {
-            if column.last().unwrap().end <= event.start {
-                column.push(event.clone());
-                placed = true;
-                break;
+            if let Some(last_event) = column.last() {
+                if last_event.end <= event.start {
+                    column.push(event.clone());
+                    placed = true;
+                    break;
+                }
             }
         }
 
@@ -113,6 +139,10 @@ impl Group {
 
         self.start = self.start.min(event.start);
         self.end = self.end.max(event.end);
+    }
+
+    fn is_overlap(&self, event: &Event) -> bool {
+        self.start < event.end && event.start < self.end
     }
 
     fn calc_layout(&self) -> LayoutGroup {
@@ -143,19 +173,14 @@ impl Group {
     }
 }
 
-fn is_overlap(group: &Group, event: &Event) -> bool {
-    group.start < event.end && event.start < group.end
-}
-
-fn generate_result_array(layout_groups: &Vec<LayoutGroup>) -> Box<[f32]> {
+fn generate_result_array(layout_groups: &[LayoutGroup]) -> Box<[f32]> {
     let total_length = layout_groups
         .iter()
-        .map(|lg| {
-            4 + lg.items.len() * 7 // 4 for LayoutGroup fields + 7 for each EventLayout
-        })
+        .map(|lg| LAYOUT_GROUP_FIELDS + lg.items.len() * EVENT_LAYOUT_FIELDS)
         .sum::<usize>();
 
-    let mut result_array = vec![0.0f32; total_length];
+    let mut result_array = Vec::with_capacity(total_length);
+    result_array.resize(total_length, 0.0f32);
     let mut index = 0;
 
     for layout_group in layout_groups {
@@ -266,5 +291,188 @@ mod tests {
         assert_eq!(layout_groups[0].end, 2.0);
         assert_eq!(layout_groups[0].column_count, 1);
         assert_eq!(layout_groups[0].items.len(), 1);
+    }
+
+    #[test]
+    fn test_complex_overlapping_events() {
+        // 测试多个重叠事件组
+        let events = vec![
+            Event {
+                id: 1.0,
+                start: 0.0,
+                end: 3.0,
+            }, // 第一组
+            Event {
+                id: 2.0,
+                start: 1.0,
+                end: 4.0,
+            },
+            Event {
+                id: 3.0,
+                start: 2.0,
+                end: 5.0,
+            },
+            Event {
+                id: 4.0,
+                start: 6.0,
+                end: 8.0,
+            }, // 第二组
+            Event {
+                id: 5.0,
+                start: 7.0,
+                end: 9.0,
+            },
+            Event {
+                id: 6.0,
+                start: 8.0,
+                end: 10.0,
+            },
+        ];
+
+        let layout_groups = process_events_impl(&events);
+        assert_eq!(layout_groups.len(), 2);
+
+        // 检查第一组
+        assert_eq!(layout_groups[0].start, 0.0);
+        assert_eq!(layout_groups[0].end, 5.0);
+        assert_eq!(layout_groups[0].column_count, 3);
+        assert_eq!(layout_groups[0].items.len(), 3);
+
+        // 检查第二组
+        assert_eq!(layout_groups[1].start, 6.0);
+        assert_eq!(layout_groups[1].end, 10.0);
+        assert_eq!(layout_groups[1].column_count, 2);
+        assert_eq!(layout_groups[1].items.len(), 3);
+    }
+
+    #[test]
+    fn test_nested_events() {
+        // 测试嵌套事件（一个事件完全包含在另一个事件中）
+        let events = vec![
+            Event {
+                id: 1.0,
+                start: 0.0,
+                end: 10.0,
+            },
+            Event {
+                id: 2.0,
+                start: 2.0,
+                end: 8.0,
+            },
+            Event {
+                id: 3.0,
+                start: 3.0,
+                end: 7.0,
+            },
+        ];
+
+        let layout_groups = process_events_impl(&events);
+        assert_eq!(layout_groups.len(), 1);
+        assert_eq!(layout_groups[0].column_count, 3);
+        assert_eq!(layout_groups[0].items.len(), 3);
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        // 测试边界情况
+        let events = vec![
+            Event {
+                id: 1.0,
+                start: 0.0,
+                end: 0.0,
+            }, // 零时长事件
+            Event {
+                id: 2.0,
+                start: 1.0,
+                end: 1.0,
+            }, // 零时长事件
+            Event {
+                id: 3.0,
+                start: 2.0,
+                end: 2.0,
+            }, // 零时长事件
+            Event {
+                id: 4.0,
+                start: 3.0,
+                end: 3.0,
+            }, // 零时长事件
+        ];
+
+        let layout_groups = process_events_impl(&events);
+        assert_eq!(layout_groups.len(), 4);
+        for group in layout_groups {
+            assert_eq!(group.column_count, 1);
+            assert_eq!(group.items.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_large_number_of_events() {
+        // 测试大量事件
+        let mut events = Vec::new();
+        for i in 0..100 {
+            events.push(Event {
+                id: i as f32,
+                start: (i as f32) * 0.5,
+                end: (i as f32) * 0.5 + 1.0,
+            });
+        }
+
+        let layout_groups = process_events_impl(&events);
+        assert!(layout_groups.len() > 0);
+
+        // 验证所有事件都被正确处理
+        let total_events = layout_groups.iter().map(|g| g.items.len()).sum::<usize>();
+        assert_eq!(total_events, 100);
+    }
+
+    #[test]
+    fn test_random_overlapping_events() {
+        // 测试随机重叠事件
+        let events = vec![
+            Event {
+                id: 1.0,
+                start: 0.0,
+                end: 5.0,
+            },
+            Event {
+                id: 2.0,
+                start: 1.0,
+                end: 3.0,
+            },
+            Event {
+                id: 3.0,
+                start: 2.0,
+                end: 4.0,
+            },
+            Event {
+                id: 4.0,
+                start: 3.0,
+                end: 6.0,
+            },
+            Event {
+                id: 5.0,
+                start: 4.0,
+                end: 7.0,
+            },
+            Event {
+                id: 6.0,
+                start: 5.0,
+                end: 8.0,
+            },
+        ];
+
+        let layout_groups = process_events_impl(&events);
+        assert_eq!(layout_groups.len(), 1);
+        assert_eq!(layout_groups[0].column_count, 3);
+        assert_eq!(layout_groups[0].items.len(), 6);
+
+        // 验证布局的正确性
+        for item in &layout_groups[0].items {
+            assert!(item.top >= 0.0);
+            assert!(item.bottom >= 0.0);
+            assert!(item.height > 0.0);
+            assert!(item.column < layout_groups[0].column_count);
+        }
     }
 }

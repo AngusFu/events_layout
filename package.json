@@ -1,0 +1,17 @@
+{
+  "name": "group_events",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "vitest": "^1.4.0"
+  }
+}

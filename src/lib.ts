@@ -3,11 +3,11 @@ interface BaseRange {
   end: number
 }
 
-interface Event extends BaseRange {
+export interface Event extends BaseRange {
   id: string
 }
 
-interface EventLayout {
+export interface EventLayout {
   /** by percent */
   top: number
   /** by percent */
@@ -84,21 +84,22 @@ function mergeEvents(events: Event[]) {
   if (events.length === 0) return []
 
   const groups: Group[] = []
-  let currentGroup = new Group()
-  currentGroup.add(events[0])
 
-  for (let i = 1; i < events.length; i++) {
-    const currentEvent = events[i]
-    if (isOverlap(currentGroup, currentEvent)) {
-      currentGroup.add(currentEvent)
-    } else {
-      groups.push(currentGroup)
-      currentGroup = new Group()
-      currentGroup.add(currentEvent)
+  for (const event of events) {
+    let placed = false
+    if (groups.length > 0) {
+      const lastGroup = groups[groups.length - 1]
+      if (isOverlap(lastGroup, event)) {
+        lastGroup.add(event)
+        placed = true
+      }
+    }
+    if (!placed) {
+      const newGroup = new Group()
+      newGroup.add(event)
+      groups.push(newGroup)
     }
   }
-
-  groups.push(currentGroup)
 
   return groups
 }
